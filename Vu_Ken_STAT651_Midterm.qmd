@@ -1,0 +1,86 @@
+---
+title: "STAT651_Midterm"
+author: "Ken Vu"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+format: pdf
+editor: visual
+---
+
+```{r, include=F}
+# loading relevant libraries
+library(pacman)
+p_load(tidyverse, gtrendsR, flexdashboard)
+```
+
+# Problem 1
+
+**Answer:** An example of a heatmap pulled from this link: [Click here for heatmap example ('Absolutely Positioned Panels')](https://shiny.rstudio.com/gallery/absolutely-positioned-panels.html)
+
+Here's my uploaded ShinyApp: 
+[Click here for the heatmap example I found](https://xsqk9k-ken-vu.shinyapps.io/Problem1_heatmap/)
+
+In the zip file submitted for the Midterm on Canvas, see folder `Problem 1` in main folder `Vu_Ken_Stat651_Midterm` for the code.
+
+# Problem 2
+
+**Answer:** Here's the resulting ShinyApp for Google Trends: [Click here for link to modified GoogleTrends map](https://xsqk9k-ken-vu.shinyapps.io/STAT651_Midterm_Prob2_GoogleTrends_App/)
+
+Below are the steps used to get the new trend data.
+
+First, we go into the folder `Problem 2` in the attached zip file, access the `New_GoogleTrends_App` folder, and replace the data in its subfolder `data` with new data on different trends we want to look at.
+
+In this case, let's look at Google search hits for four iconic superheroes in mainstream media (as of 2022) - Batman, Spider-Man, Venom, and Black Panther.
+
+```{r}
+data("categories")
+head(categories)
+```
+
+Getting trend data.
+
+```{r, eval=F}
+res <- gtrends(c("Batman","Spider Man", "Venom", "Black Panther"),
+               geo = c(rep("US",times=4)),
+               time = "all")
+saveRDS(res,"gtrends_superheroes.RDS")
+```
+
+Loading in RDS
+
+```{r}
+res <- readRDS("gtrends_superheroes.RDS")
+plot(res)
+```
+
+Extracting only the `interest_over_time` data.
+
+```{r}
+res <- res$interest_over_time
+head(res)
+```
+
+Now, let's put the data into a .csv
+
+```{r, eval=F}
+res %>% select(keyword, date, hits) %>%
+  rename(type = keyword, close = hits) %>%
+  write_csv("trend_data.csv")
+```
+
+# Problem 3
+
+NOTE: This dashboard requires you to scroll up and down to view all of it due to the sheer size of the `flexdashboard`.
+
+See attached zip file for code for Problem 3 (in the midterm folder in the subfolder `Problem3_flexdashboard`).
+
+**Answer:** Link to dashboard of `baywheels` data: [Click here to see the flexdashboard for Problem 3](https://rpubs.com/KV777/974103)
+
+**Answer:** (explaining what the dashboard communicates) For this problem, I created a dashboard to look at the nature of travel with the electric and classic bikes that are returned to Powell St BART Station for October 2022.
+
+The top left dashboard looks at the top five most common starting stations in October 2022 based on the type of bike used.
+
+The bottom left dashboard looks at the top 5 most common starting station across all days of the week for October 2022.
+
+Given the heavy usage of Powell St BART Station as a starting station (based off the data), I also looked at the median ride lengths (or the total amount of time spent on the bikes) for each bike taken and returned to Powell St BART Station (see the top right dashboard). I looked at the median ride length across the entire 2022 year.
+
+Finally, the bottom right spatial map plots the end station's location (in this case, Powell St BART Station) as well as the starting points of the bike ride for the month of October 2022.
