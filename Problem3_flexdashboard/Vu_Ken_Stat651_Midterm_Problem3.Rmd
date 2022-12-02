@@ -1,0 +1,268 @@
+---
+title: "STAT651_Midterm_Prob3_flexdashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: scroll
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(pacman)
+p_load(tidyverse, ggmap, tictoc, skimr, lubridate, forcats,plotly, tidytext, ggspatial, leaflet, sf)
+```
+
+```{r,include=F, eval=F}
+# Code to set up data
+df1 <- read_csv("data//202210-baywheels-tripdata.csv")
+df1 %>% head()
+```
+
+
+```{r,include=F, eval=F}
+df1 <- df1 %>%
+  mutate(week_day = factor(
+    wday(started_at)) %>%
+      recode_factor(
+        !!!c(`1`="M",`2`="T",`3`="W",`4`="TH",
+             `5`="F",`6`="SAT",`7`="SUN")))
+df1
+```
+
+
+```{r, include=F, eval=F}
+# Now, get total duration of ride
+df1 <- df1 %>%
+  mutate(ride_length = difftime(ended_at,started_at,units = "secs") %>% as.numeric() %>% abs())
+```
+
+
+```{r, eval=F}
+saveRDS(df1,"202210-baywheels_tripdata_NEW.rds")
+```
+
+
+```{r}
+df1 <- readRDS("202210-baywheels_tripdata_NEW.rds") 
+```
+
+```{r}
+# What are the top 10 destinations people stop by
+df1_summary <- df1 %>%
+  filter(str_detect(end_station_name, "Powell St BART Station")) %>%
+  group_by(start_station_name, rideable_type) %>%
+  summarise(count=n(),
+            median_time=median(ride_length)/60) %>%
+  arrange(desc(count)) %>%
+  na.omit() %>%
+  group_by(rideable_type) %>%
+  slice(1:5)
+```
+
+
+
+
+Row
+-------------------------------------
+ 
+### TOP 5 stations people head to `Powell St BART Station` from for October 2022 by `rideable_type`? 
+```{r, fig.height=3, fig.width=5}
+{df1_summary %>%
+    # get rid of addresses for non-Powell stations
+    # also reorder starting station name based
+    # on count and type of bike used
+    mutate(start_station_name=
+             reorder_within(
+             ifelse(
+    str_detect(start_station_name,"Powell"),
+    start_station_name, gsub("\\(.*","",start_station_name)),
+    count,rideable_type)) %>%
+    
+  # setting up faceted bar graphs
+  ggplot(aes(x=count,y=start_station_name)
+         ) +
+  geom_col() + 
+  facet_wrap(rideable_type~., scales="free_y") + 
+  
+  # aesthetic modification
+  scale_y_discrete() + 
+  labs(x="Count",y="Starting Station Name") + 
+  scale_y_reordered(labels = function(x) str_wrap(reorder_func(x), width = 15)) + 
+  theme_bw() + 
+  theme(
+    panel.grid.major = element_line(color="white"),
+        panel.grid.minor = element_line(color="white"),
+    axis.text.y=element_text(size=7),
+    # control spacing on ggplotly
+    panel.spacing.x = unit(-7, "lines"))} %>%
+  ggplotly()
+```    
+    
+### Top 5 Starting Stations to Powell Station by Day of the Week (for October 2022)?
+```{r}
+df1_summary2 <- df1 %>%
+  filter(str_detect(end_station_name, "Powell St BART Station")) %>%
+  mutate(start_station_name=ifelse(
+    !str_detect(start_station_name,"Powell"),
+    start_station_name, gsub("\\(.*","",start_station_name))) %>%
+  group_by(start_station_name, week_day) %>%
+  summarise(count=n(),
+            median_dist=median(dist)/5280,
+            median_time=median(ride_length)/60) %>%
+  mutate(is_powell = ifelse(!str_detect(start_station_name,"Powell"),
+                       "No","Yes")) %>%
+  arrange(desc(count)) %>%
+  na.omit() %>%
+  group_by(week_day) %>%
+  slice(1:5)
+```
+
+```{r}
+{df1_summary2 %>%
+  # get rid of addresses for non-Powell stations
+    # also reorder starting station name based
+    # on count and type of bike used
+    mutate(start_station_name=
+             reorder_within(
+             start_station_name, 
+             count,week_day)) %>%
+  ggplot(aes(x=count,y=start_station_name,
+             fill=is_powell)) +
+  geom_col() + 
+  facet_wrap(~week_day, scales="free_y") + 
+  scale_fill_manual(values = c("#bebebe","#0066CC")) + 
+  labs(x="Count",y="Starting Station Name") +
+  theme_bw() + 
+  theme(axis.text.y = element_text(size=3),
+        axis.text.x = element_text(size=6),
+        legend.position = "Top",
+        panel.grid.major = element_line(color="white"),
+        panel.grid.minor = element_line(color="white"),
+        panel.spacing.x = unit(-4, "lines")) + 
+    scale_y_reordered(labels = function(x) str_wrap(reorder_func(x), width = 15))
+} %>% ggplotly()
+```
+
+Row 
+-------------------------------------
+    
+### The Median Ride Length Within Powell Station for 2022
+
+```{r, include=F, eval=F}
+# load all the 2022 data
+bikewheels_2022 <- read_csv("data//202210-baywheels-tripdata.csv")
+  
+for(i in 1:9){
+  bikewheels_2022 <- rbind(bikewheels_2022, 
+                           read_csv(
+ paste("data//20220",i,"-baywheels-tripdata.csv",sep=""))
+                           )
+  
+}
+```
+
+
+```{r, include=F, eval=F}
+# Get all bike trips within Powell Station for 
+# 2022
+df1_year_ridelengths <- bikewheels_2022 %>%
+  
+  # recode weekdays
+  mutate(week_day = factor(
+    wday(started_at)) %>%
+      recode_factor(
+        !!!c(`1`="M",`2`="T",`3`="W",`4`="TH",
+             `5`="F",`6`="SAT",`7`="SUN"))) %>%
+  # add ride_length variable
+  mutate(ride_length = difftime(ended_at,started_at,units = "min") %>% as.numeric() %>% abs()) %>%
+  
+  # summarise
+  mutate(ride_day=mdy(format(started_at,'%m-%d-%Y')))
+```
+
+
+```{r, include=F, eval=F}
+saveRDS(df1_year_ridelengths,"bikewheels_data_2022.rds")
+```
+
+```{r}
+df1_year_ridelengths <- readRDS("bikewheels_data_2022.rds")
+```
+
+
+```{r}
+# dates for solstice, equinox for 2022
+season_bounds <- data.frame(
+  name=c("Spring Equinox", "Midsummer Solstice", 
+         "Autumn Equinox", "Midwinter Solstice"),
+  start=mdy(c("03-20-2022",
+                 "06-21-2022",
+                 "09-23-2022",
+                 "12-22-2022"))
+  )
+
+# text to display on plot
+season_text <- tribble(~x,~y,~text,
+                       season_bounds$start[1]-days(40),100,"Winter",
+season_bounds$start[2]-days(40),100,"Spring",
+season_bounds$start[3]-days(40),100,"Summer",
+season_bounds$start[4]-days(70),100,"Fall"
+                       )
+```
+
+
+```{r}
+{ df1_year_ridelengths %>%
+  filter(str_detect(start_station_name, "Powell St BART") & str_detect(end_station_name, "Powell St BART")) %>%
+    # summarise median ride lengths per day
+    group_by(ride_day) %>%
+    summarise(med_ridelength=median(ride_length)) %>%
+    
+    # plot
+    ggplot(aes(ride_day,med_ridelength)) + 
+    geom_line() +
+    geom_vline(xintercept=as.numeric(season_bounds$start),
+               linetype="dotted") + 
+    geom_text(data=season_text,
+              aes(x=x,y=y,label=text),
+              color="black",
+              size=4) + 
+    geom_smooth(se=F) + 
+    
+    # data visualization aesthetics
+    theme_bw() + 
+    theme(panel.grid.major = element_line(color="white"),
+          panel.grid.minor=element_line(color="white")) + 
+    labs(x="Day",y="Median Ride Length (min)")} %>%
+  ggplotly()
+  
+  
+```
+
+### Map of Starting Stations to Powell St BART Station (in Oct 2022)
+```{r}
+df1 <- df1 %>%
+  st_as_sf(coords = c("start_lng","start_lat"), crs=4326) %>%
+st_transform(crts=4326) %>%
+  filter(str_detect(end_station_name, "Powell St BART Station"))
+```
+
+```{r}
+# 37.783993, -122.407791 (coordiantes for Powell)
+pts_Powell <- data.frame(long=37.783993,
+                         lat=-122.407791,
+                         End_Station="Powell St BART Station")  %>%
+  st_as_sf(coords = c("lat","long"), crs=4326) %>%
+st_transform(crts=4326)
+  
+
+{ggplot() +
+  annotation_map_tile(type = "osm", zoomin = 0)  + 
+  geom_sf(data=df1, aes(geometry=geometry))  + 
+geom_sf(data=pts_Powell, aes(geometry=geometry,color=End_Station),size=5) + 
+  labs(x="Longitude", y="Latitude"
+  ) + 
+    theme(axis.text.x=element_text(angle=15))}
+```
+
+
